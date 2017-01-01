@@ -1,14 +1,13 @@
 import codecs
 import os
 
-import numpy as np
 import sklearn.metrics
-import tensorflow as tf
 import torch
 from torch import autograd
 
 import utils_nlp
 from evaluate import remap_labels
+
 
 def train_step(dataset, sequence_number, model, parameters):
     model.zero_grad()
@@ -21,10 +20,9 @@ def train_step(dataset, sequence_number, model, parameters):
 
     neg_log_likelihood.backward()
     model.optimizer.step()
-    scores = model.transitions
-    return neg_log_likelihood
+    transition_params_trained = model.transitions.data.numpy()
+    return transition_params_trained
 
-    # transition_parameters_trained (19, 19)
 
 def prediction_step(dataset, dataset_type, model, transition_params_trained, stats_graph_folder, epoch_number,
                     parameters, dataset_filepaths):
@@ -42,16 +40,6 @@ def prediction_step(dataset, dataset_type, model, transition_params_trained, sta
         token_indices = dataset.token_indices[dataset_type][i]
         sentence = autograd.Variable(torch.LongTensor(token_indices))
         score, predictions = model(sentence)
-
-        # unary_scores: (11, 19),
-        # [-1000. -1000. -1000. -1000. -1000. -1000. -1000. -1000. -1000. -1000.
-        # -1000. -1000. -1000. -1000. -1000. -1000. -1000.     0. -1000.]
-        # [ -1.35614812e-01   5.54611422e-02  -6.10291846e-02   1.15556702e-01
-        #   5.16077317e-02   1.17487669e-01   4.47962247e-02  -1.63568586e-01
-        #   7.57702291e-02   5.80324456e-02   3.35181057e-02  -6.81348592e-02
-        #   9.26167518e-02   1.69677854e-01  -2.49845609e-
-
-        #  predictions: (9,) [13,3,9,9...14,14]
 
         assert (len(predictions) == len(dataset.tokens[dataset_type][i]))
         output_string = ''
@@ -103,7 +91,8 @@ def prediction_step(dataset, dataset_type, model, transition_params_trained, sta
     return all_predictions, all_y_true, output_filepath
 
 
-def predict_labels(model, transition_params_trained, parameters, dataset, epoch_number, stats_graph_folder, dataset_filepaths):
+def predict_labels(model, transition_params_trained, parameters, dataset, epoch_number, stats_graph_folder,
+                   dataset_filepaths):
     # Predict labels using trained model
     y_pred = {}
     y_true = {}

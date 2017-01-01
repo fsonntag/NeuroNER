@@ -49,7 +49,6 @@ class BiLSTM_CRF(nn.Module):
         self.tag_to_ix[STOP_TAG] = maximum_label_index + 2
         self.tagset_size = len(self.tag_to_ix)
 
-
         self.word_embeds = nn.Embedding(self.vocab_size, self.embedding_dim)
         self.lstm = nn.LSTM(self.embedding_dim, self.hidden_dim // 2,
                             num_layers=1, bidirectional=True)
@@ -61,6 +60,8 @@ class BiLSTM_CRF(nn.Module):
         # transitioning *to* i *from* j.
         self.transitions = nn.Parameter(
             torch.randn(self.tagset_size, self.tagset_size))
+        self.transitions.data[self.tag_to_ix[START_TAG], :] = -10000
+        self.transitions.data[:, self.tag_to_ix[STOP_TAG]] = -10000
 
         self.hidden = self.init_hidden()
 
@@ -108,8 +109,8 @@ class BiLSTM_CRF(nn.Module):
         lstm_out, self.hidden = self.lstm(embeds, self.hidden)
         lstm_out = lstm_out.view(len(sentence), self.hidden_dim)
         lstm_feats = self.hidden2tag(lstm_out)
-        lstm_feats[:, self.tag_to_ix[START_TAG]] = -10000.
-        lstm_feats[:, self.tag_to_ix[STOP_TAG]] = -10000.
+        # lstm_feats[:, self.tag_to_ix[START_TAG]] = -10000.
+        # lstm_feats[:, self.tag_to_ix[STOP_TAG]] = -10000.
         return lstm_feats
 
     def _score_sentence(self, feats, tags):

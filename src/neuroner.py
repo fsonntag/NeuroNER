@@ -1,6 +1,10 @@
 import matplotlib
+
+from torch_entity_lstm import BiLSTM_CRF
+
 matplotlib.use('Agg')
 import train
+import torch_train
 import dataset as ds
 import tensorflow as tf
 from tensorflow.contrib.tensorboard.plugins import projector
@@ -22,6 +26,7 @@ import utils_nlp
 import distutils
 import configparser
 from pprint import pprint
+from distutils.util import strtobool
 # http://stackoverflow.com/questions/42217532/tensorflow-version-1-0-0-rc2-on-windows-opkernel-op-bestsplits-device-typ
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 print('NeuroNER version: {0}'.format('1.0-dev'))
@@ -115,7 +120,7 @@ class NeuroNER(object):
             elif k in ['remap_unknown_tokens_to_unk', 'use_character_lstm', 'use_crf', 'train_model', 'use_pretrained_model', 'debug', 'verbose',
                      'reload_character_embeddings', 'reload_character_lstm', 'reload_token_embeddings', 'reload_token_lstm', 'reload_feedforward', 'reload_crf',
                      'check_for_lowercase', 'check_for_digits_replaced_with_zeros', 'freeze_token_embeddings', 'load_only_pretrained_token_embeddings', 'load_all_pretrained_token_embeddings']:
-                parameters[k] = distutils.util.strtobool(v)
+                parameters[k] = strtobool(v)
         # If loading pretrained model, set the model hyperparameters according to the pretraining parameters 
         if parameters['use_pretrained_model']:
             pretraining_parameters = self._load_parameters(parameters_filepath=os.path.join(parameters['pretrained_model_folder'], 'parameters.ini'), verbose=False)[0]
@@ -261,46 +266,51 @@ class NeuroNER(object):
         # Load dataset
         dataset = ds.Dataset(verbose=parameters['verbose'], debug=parameters['debug'])
         token_to_vector = dataset.load_dataset(dataset_filepaths, parameters)
-        
-        # Launch session
-        session_conf = tf.ConfigProto(
-        intra_op_parallelism_threads=parameters['number_of_cpu_threads'],
-        inter_op_parallelism_threads=parameters['number_of_cpu_threads'],
-        device_count={'CPU': 1, 'GPU': parameters['number_of_gpus']},
-        allow_soft_placement=True, # automatically choose an existing and supported device to run the operations in case the specified one doesn't exist
-        log_device_placement=False
-        )
-        sess = tf.Session(config=session_conf)
-        
-        with sess.as_default():
-            # Create model and initialize or load pretrained model
-            ### Instantiate the model
-            model = EntityLSTM(dataset, parameters)
-            ### Initialize the model and restore from pretrained model if needed
-            sess.run(tf.global_variables_initializer())
-            if not parameters['use_pretrained_model']:
-                model.load_pretrained_token_embeddings(sess, dataset, parameters, token_to_vector)
-                self.transition_params_trained = np.random.rand(len(dataset.unique_labels)+2,len(dataset.unique_labels)+2)
-            else:
-                self.transition_params_trained = model.restore_from_pretrained_model(parameters, dataset, sess, token_to_vector=token_to_vector)
-            del token_to_vector
 
+        torch_model = BiLSTM_CRF(dataset, parameters)
+
+        # Launch session
+        # session_conf = tf.ConfigProto(
+        # intra_op_parallelism_threads=parameters['number_of_cpu_threads'],
+        # inter_op_parallelism_threads=parameters['number_of_cpu_threads'],
+        # device_count={'CPU': 1, 'GPU': parameters['number_of_gpus']},
+        # allow_soft_placement=True, # automatically choose an existing and supported device to run the operations in case the specified one doesn't exist
+        # log_device_placement=False
+        # )
+        # sess = tf.Session(config=session_conf)
+        #
+        # with sess.as_default():
+        #     # Create model and initialize or load pretrained model
+        #     ### Instantiate the model
+        #     model = EntityLSTM(dataset, parameters)
+        #     ### Initialize the model and restore from pretrained model if needed
+        #     sess.run(tf.global_variables_initializer())
+        #     if not parameters['use_pretrained_model']:
+        #         model.load_pretrained_token_embeddings(sess, dataset, parameters, token_to_vector)
+        #         self.transition_params_trained = np.random.rand(len(dataset.unique_labels)+2,len(dataset.unique_labels)+2)
+        #     else:
+        #         self.transition_params_trained = model.restore_from_pretrained_model(parameters, dataset, sess, token_to_vector=token_to_vector)
+        #     del token_to_vector
+        self.transition_params_trained = np.random.rand(len(dataset.unique_labels)+2,len(dataset.unique_labels)+2)
         self.dataset = dataset
         self.dataset_brat_folders = dataset_brat_folders
         self.dataset_filepaths = dataset_filepaths
-        self.model = model
+        # self.model = model
         self.parameters = parameters
         self.conf_parameters = conf_parameters
-        self.sess = sess
-   
+        # self.sess = sess
+        self.torch_model = torch_model
+
+
     def fit(self):
         parameters = self.parameters
         conf_parameters = self.conf_parameters
         dataset_filepaths = self.dataset_filepaths
         dataset = self.dataset
         dataset_brat_folders = self.dataset_brat_folders
-        sess = self.sess
-        model = self.model
+        # sess = self.sess
+        # model = self.model
+        torch_model = self.torch_model
         transition_params_trained = self.transition_params_trained
         stats_graph_folder, experiment_timestamp = self._create_stats_graph_folder(parameters)
 
@@ -331,36 +341,36 @@ class NeuroNER(object):
                 
         # Instantiate the writers for TensorBoard
         writers = {}
-        for dataset_type in dataset_filepaths.keys():
-            writers[dataset_type] = tf.summary.FileWriter(tensorboard_log_folders[dataset_type], graph=sess.graph)
-        embedding_writer = tf.summary.FileWriter(model_folder) # embedding_writer has to write in model_folder, otherwise TensorBoard won't be able to view embeddings
+        # for dataset_type in dataset_filepaths.keys():
+        #     writers[dataset_type] = tf.summary.FileWriter(tensorboard_log_folders[dataset_type], graph=sess.graph)
+        # embedding_writer = tf.summary.FileWriter(model_folder) # embedding_writer has to write in model_folder, otherwise TensorBoard won't be able to view embeddings
 
-        embeddings_projector_config = projector.ProjectorConfig()
-        tensorboard_token_embeddings = embeddings_projector_config.embeddings.add()
-        tensorboard_token_embeddings.tensor_name = model.token_embedding_weights.name
-        token_list_file_path = os.path.join(model_folder, 'tensorboard_metadata_tokens.tsv')
-        tensorboard_token_embeddings.metadata_path = os.path.relpath(token_list_file_path, '..')
-
-        tensorboard_character_embeddings = embeddings_projector_config.embeddings.add()
-        tensorboard_character_embeddings.tensor_name = model.character_embedding_weights.name
-        character_list_file_path = os.path.join(model_folder, 'tensorboard_metadata_characters.tsv')
-        tensorboard_character_embeddings.metadata_path = os.path.relpath(character_list_file_path, '..')
-
-        projector.visualize_embeddings(embedding_writer, embeddings_projector_config)
+        # embeddings_projector_config = projector.ProjectorConfig()
+        # tensorboard_token_embeddings = embeddings_projector_config.embeddings.add()
+        # tensorboard_token_embeddings.tensor_name = model.token_embedding_weights.name
+        # token_list_file_path = os.path.join(model_folder, 'tensorboard_metadata_tokens.tsv')
+        # tensorboard_token_embeddings.metadata_path = os.path.relpath(token_list_file_path, '..')
+        #
+        # tensorboard_character_embeddings = embeddings_projector_config.embeddings.add()
+        # tensorboard_character_embeddings.tensor_name = model.character_embedding_weights.name
+        # character_list_file_path = os.path.join(model_folder, 'tensorboard_metadata_characters.tsv')
+        # tensorboard_character_embeddings.metadata_path = os.path.relpath(character_list_file_path, '..')
+        #
+        # projector.visualize_embeddings(embedding_writer, embeddings_projector_config)
 
         # Write metadata for TensorBoard embeddings
-        token_list_file = codecs.open(token_list_file_path,'w', 'UTF-8')
-        for token_index in range(dataset.vocabulary_size):
-            token_list_file.write('{0}\n'.format(dataset.index_to_token[token_index]))
-        token_list_file.close()
-
-        character_list_file = codecs.open(character_list_file_path,'w', 'UTF-8')
-        for character_index in range(dataset.alphabet_size):
-            if character_index == dataset.PADDING_CHARACTER_INDEX:
-                character_list_file.write('PADDING\n')
-            else:
-                character_list_file.write('{0}\n'.format(dataset.index_to_character[character_index]))
-        character_list_file.close()
+        # token_list_file = codecs.open(token_list_file_path,'w', 'UTF-8')
+        # for token_index in range(dataset.vocabulary_size):
+        #     token_list_file.write('{0}\n'.format(dataset.index_to_token[token_index]))
+        # token_list_file.close()
+        #
+        # character_list_file = codecs.open(character_list_file_path,'w', 'UTF-8')
+        # for character_index in range(dataset.alphabet_size):
+        #     if character_index == dataset.PADDING_CHARACTER_INDEX:
+        #         character_list_file.write('PADDING\n')
+        #     else:
+        #         character_list_file.write('{0}\n'.format(dataset.index_to_character[character_index]))
+        # character_list_file.close()
 
 
         # Start training + evaluation loop. Each iteration corresponds to 1 epoch.
@@ -380,7 +390,10 @@ class NeuroNER(object):
                     sequence_numbers=list(range(len(dataset.token_indices['train'])))
                     random.shuffle(sequence_numbers)
                     for sequence_number in sequence_numbers:
-                        transition_params_trained = train.train_step(sess, dataset, sequence_number, model, parameters)
+
+
+                        # transition_params_trained = train.train_step(sess, dataset, sequence_number, model, parameters)
+                        torch_transition_params_trained = torch_train.train_step(dataset, sequence_number, torch_model, parameters)
                         step += 1
                         if step % 10 == 0:
                             print('Training {0:.2f}% done'.format(step/len(sequence_numbers)*100), end='\r', flush=True)
@@ -388,23 +401,29 @@ class NeuroNER(object):
                 epoch_elapsed_training_time = time.time() - epoch_start_time
                 print('Training completed in {0:.2f} seconds'.format(epoch_elapsed_training_time), flush=True)
 
-                y_pred, y_true, output_filepaths = train.predict_labels(sess, model, transition_params_trained, parameters, dataset, epoch_number, stats_graph_folder, dataset_filepaths)
+                # y_pred, y_true, output_filepaths = train.predict_labels(sess, model, transition_params_trained, parameters, dataset, epoch_number, stats_graph_folder, dataset_filepaths)
+                torch_y_pred, torch_y_true, torch_output_filepaths = torch_train.predict_labels(torch_model, transition_params_trained,
+                                                                        parameters, dataset, epoch_number,
+                                                                        stats_graph_folder, dataset_filepaths)
 
                 # Evaluate model: save and plot results
-                evaluate.evaluate_model(results, dataset, y_pred, y_true, stats_graph_folder, epoch_number, epoch_start_time, output_filepaths, parameters)
+                # evaluate.evaluate_model(results, dataset, y_pred, y_true, stats_graph_folder, epoch_number, epoch_start_time, output_filepaths, parameters)
+                evaluate.evaluate_model(results, dataset, torch_y_pred, torch_y_true, stats_graph_folder, epoch_number,
+                                        epoch_start_time, torch_output_filepaths, parameters)
 
                 if parameters['use_pretrained_model'] and not parameters['train_model']:
-                    conll_to_brat.output_brat(output_filepaths, dataset_brat_folders, stats_graph_folder)
+                    # conll_to_brat.output_brat(output_filepaths, dataset_brat_folders, stats_graph_folder)
+                    conll_to_brat.output_brat(torch_output_filepaths, dataset_brat_folders, stats_graph_folder)
                     break
 
                 # Save model
-                model.saver.save(sess, os.path.join(model_folder, 'model_{0:05d}.ckpt'.format(epoch_number)))
+                # model.saver.save(sess, os.path.join(model_folder, 'model_{0:05d}.ckpt'.format(epoch_number)))
 
                 # Save TensorBoard logs
-                summary = sess.run(model.summary_op, feed_dict=None)
-                writers['train'].add_summary(summary, epoch_number)
-                writers['train'].flush()
-                utils.copytree(writers['train'].get_logdir(), model_folder)
+                # summary = sess.run(model.summary_op, feed_dict=None)
+                # writers['train'].add_summary(summary, epoch_number)
+                # writers['train'].flush()
+                # utils.copytree(writers['train'].get_logdir(), model_folder)
 
 
                 # Early stop
@@ -412,7 +431,9 @@ class NeuroNER(object):
                 if  valid_f1_score > previous_best_valid_f1_score:
                     bad_counter = 0
                     previous_best_valid_f1_score = valid_f1_score
-                    conll_to_brat.output_brat(output_filepaths, dataset_brat_folders, stats_graph_folder, overwrite=True)
+                    # conll_to_brat.output_brat(output_filepaths, dataset_brat_folders, stats_graph_folder, overwrite=True)
+                    conll_to_brat.output_brat(torch_output_filepaths, dataset_brat_folders, stats_graph_folder,
+                                              overwrite=True)
                     self.transition_params_trained = transition_params_trained
                 else:
                     bad_counter += 1

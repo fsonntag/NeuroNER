@@ -7,40 +7,26 @@ import torch.optim as optim
 
 START_TAG = "<START>"
 STOP_TAG = "<STOP>"
-# EMBEDDING_DIM = 5
-# HIDDEN_DIM = 4
-
-def to_scalar(var):
-    # returns a python float
-    return var.view(-1).data.tolist()[0]
-
-
-def argmax(vec):
-    # return the argmax as a python int
-    _, idx = torch.max(vec, 1)
-    return to_scalar(idx)
-
-
-def prepare_sequence(seq, to_ix):
-    idxs = [to_ix[w] for w in seq]
-    tensor = torch.LongTensor(idxs)
-    return autograd.Variable(tensor)
 
 
 # Compute log sum exp in a numerically stable way for the forward algorithm
 def log_sum_exp(vec):
-    max_score = vec[0, argmax(vec)]
-    max_score_broadcast = max_score.view(1, -1).expand(1, vec.size()[1])
+    max_score = torch.max(vec)
+    max_score_broadcast = max_score.expand(1, vec.size()[1])
     return max_score + \
-        torch.log(torch.sum(torch.exp(vec - max_score_broadcast)))
+           torch.log(torch.sum(torch.exp(vec - max_score_broadcast)))
+
 
 class BiLSTM_CRF(nn.Module):
-
     def __init__(self, dataset, parameters):
         super(BiLSTM_CRF, self).__init__()
-        self.embedding_dim = parameters['token_embedding_dimension']
-        self.hidden_dim = parameters['token_lstm_hidden_state_dimension']
+        self.token_embedding_dim = parameters['token_embedding_dimension']
+        self.char_embedding_dim = parameters['character_embedding_dimension']
+        self.token_hidden_dim = parameters['token_lstm_hidden_state_dimension']
+        self.char_hidden_dim = parameters['character_lstm_hidden_state_dimension']
         self.vocab_size = dataset.vocabulary_size
+        self.alphabet_size = dataset.vocabulary_size
+
         self.tag_to_ix = dataset.label_to_index
 
         maximum_label_index = max(self.tag_to_ix.values())
@@ -49,12 +35,22 @@ class BiLSTM_CRF(nn.Module):
         self.tag_to_ix[STOP_TAG] = maximum_label_index + 2
         self.tagset_size = len(self.tag_to_ix)
 
-        self.word_embeds = nn.Embedding(self.vocab_size, self.embedding_dim)
-        self.lstm = nn.LSTM(self.embedding_dim, self.hidden_dim // 2,
-                            num_layers=1, bidirectional=True)
+        self.word_embeddings = nn.Embedding(self.vocab_size, self.token_embedding_dim)
+        # self.char_embeddings = nn.Embedding(self.alphabet_size, self.char_embedding_dim)
+
+        # if parameters['use_character_lstm']:
+        #     self.char_lstm = nn.LSTM(self.char_embedding_dim, self.char_hidden_dim)
+        #
+        #     # The LSTM takes word embeddings as inputs, and outputs hidden states
+        #     # with dimensionality hidden_dim.
+        #     self.token_lstm = nn.LSTM(self.token_embedding_dim + self.char_hidden_dim, self.token_embedding_dim)
+        #
+        # else:
+        self.token_lstm = nn.LSTM(self.token_embedding_dim, self.token_hidden_dim // 2,
+                                  num_layers=1, bidirectional=True)
 
         # Maps the output of the LSTM into tag space.
-        self.hidden2tag = nn.Linear(self.hidden_dim, self.tagset_size)
+        self.hidden2tag = nn.Linear(self.token_hidden_dim, self.tagset_size)
 
         # Matrix of transition parameters.  Entry i,j is the score of
         # transitioning *to* i *from* j.
@@ -63,13 +59,19 @@ class BiLSTM_CRF(nn.Module):
         self.transitions.data[self.tag_to_ix[START_TAG], :] = -10000
         self.transitions.data[:, self.tag_to_ix[STOP_TAG]] = -10000
 
-        self.hidden = self.init_hidden()
+        # self.token_hidden, self.char_hidden = self.init_hidden()
+        self.token_hidden = self.init_hidden()
 
         self.define_training_procedure(parameters)
 
     def init_hidden(self):
-        return (autograd.Variable(torch.randn(2, 1, self.hidden_dim // 2)),
-                autograd.Variable(torch.randn(2, 1, self.hidden_dim // 2)))
+        # return ((autograd.Variable(torch.randn(2, 1, self.token_hidden_dim // 2)),
+        #         autograd.Variable(torch.randn(2, 1, self.token_hidden_dim // 2))),
+        #         (autograd.Variable(torch.randn(1, 1, self.char_hidden_dim)),
+        #          autograd.Variable(torch.randn(1, 1, self.char_hidden_dim))))
+
+        return (autograd.Variable(torch.randn(2, 1, self.token_hidden_dim // 2)),
+                autograd.Variable(torch.randn(2, 1, self.token_hidden_dim // 2)))
 
     def _forward_alg(self, feats):
         # Do the forward algorithm to compute the partition function
@@ -105,9 +107,9 @@ class BiLSTM_CRF(nn.Module):
 
     def _get_lstm_features(self, sentence):
         self.hidden = self.init_hidden()
-        embeds = self.word_embeds(sentence).view(len(sentence), 1, -1)
-        lstm_out, self.hidden = self.lstm(embeds, self.hidden)
-        lstm_out = lstm_out.view(len(sentence), self.hidden_dim)
+        embeds = self.word_embeddings(sentence).view(len(sentence), 1, -1)
+        lstm_out, self.hidden = self.token_lstm(embeds, self.hidden)
+        lstm_out = lstm_out.view(len(sentence), self.token_hidden_dim)
         lstm_feats = self.hidden2tag(lstm_out)
         # lstm_feats[:, self.tag_to_ix[START_TAG]] = -10000.
         # lstm_feats[:, self.tag_to_ix[STOP_TAG]] = -10000.
@@ -119,7 +121,7 @@ class BiLSTM_CRF(nn.Module):
         tags = torch.cat([torch.LongTensor([self.tag_to_ix[START_TAG]]), tags])
         for i, feat in enumerate(feats):
             score = score + \
-                self.transitions[tags[i + 1], tags[i]] + feat[tags[i + 1]]
+                    self.transitions[tags[i + 1], tags[i]] + feat[tags[i + 1]]
         score = score + self.transitions[self.tag_to_ix[STOP_TAG], tags[-1]]
         return score
 
@@ -133,22 +135,24 @@ class BiLSTM_CRF(nn.Module):
         # forward_var at step i holds the viterbi variables for step i-1
         forward_var = autograd.Variable(init_vvars)
         for feat in feats:
-            bptrs_t = []  # holds the backpointers for this step
-            viterbivars_t = []  # holds the viterbi variables for this step
+            bptrs_t = autograd.Variable(
+                torch.IntTensor(self.tagset_size).zero_())  # holds the backpointers for this step
+            viterbivars_t = autograd.Variable(
+                torch.FloatTensor(self.tagset_size).zero_())  # holds the viterbi variables for this step
 
-            for next_tag in range(self.tagset_size):
+            for i, next_tag in enumerate(range(self.tagset_size)):
                 # next_tag_var[i] holds the viterbi variable for tag i at the
                 # previous step, plus the score of transitioning
                 # from tag i to next_tag.
                 # We don't include the emission scores here because the max
                 # does not depend on them (we add them in below)
                 next_tag_var = forward_var + self.transitions[next_tag]
-                best_tag_id = argmax(next_tag_var)
-                bptrs_t.append(best_tag_id)
-                viterbivars_t.append(next_tag_var[0][best_tag_id])
+                viterbivar, best_tag_id = torch.max(next_tag_var, 1)
+                bptrs_t[i] = best_tag_id
+                viterbivars_t[i] = viterbivar
             # Now add in the emission scores, and assign forward_var to the set
             # of viterbi variables we just computed
-            forward_var = (torch.cat(viterbivars_t) + feat).view(1, -1)
+            forward_var = (viterbivars_t + feat).view(1, -1)
             backpointers.append(bptrs_t)
 
         # Transition to STOP_TAG
@@ -156,14 +160,14 @@ class BiLSTM_CRF(nn.Module):
         # terminal_var = (forward_var + self.transitions[self.tag_to_ix[STOP_TAG]]).clone()
         # terminal_var[0, self.tag_to_ix[STOP_TAG]] = -10000.
         # terminal_var[0, self.tag_to_ix[START_TAG]] = -10000.
-        best_tag_id = argmax(terminal_var)
-        path_score = terminal_var[0][best_tag_id]
+        path_score, best_tag_id = torch.max(terminal_var, 1)
+        best_tag_id = best_tag_id.view(1, )
 
         # Follow the back pointers to decode the best path.
-        best_path = [best_tag_id]
+        best_path = [best_tag_id.data[0]]
         for bptrs_t in reversed(backpointers):
-            best_tag_id = bptrs_t[best_tag_id]
-            best_path.append(best_tag_id)
+            best_tag_id = bptrs_t[best_tag_id.data[0]]
+            best_path.append(best_tag_id.data[0])
         # Pop off the start tag (we dont want to return that to the caller)
         start = best_path.pop()
         assert start == self.tag_to_ix[START_TAG]  # Sanity check
@@ -192,5 +196,5 @@ class BiLSTM_CRF(nn.Module):
             raise ValueError('The lr_method parameter must be sgd.')
 
         if parameters['gradient_clipping_value']:
-            #TODO
+            # TODO
             pass

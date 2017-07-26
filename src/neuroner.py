@@ -7,6 +7,7 @@ import train
 import torch_train
 import dataset as ds
 import tensorflow as tf
+import torch
 from tensorflow.contrib.tensorboard.plugins import projector
 from entity_lstm import EntityLSTM
 import utils
@@ -269,6 +270,7 @@ class NeuroNER(object):
 
         torch_model = BiLSTM_CRF(dataset, parameters)
 
+        torch.set_num_threads(parameters['number_of_cpu_threads'])
         # Launch session
         # session_conf = tf.ConfigProto(
         # intra_op_parallelism_threads=parameters['number_of_cpu_threads'],
@@ -390,8 +392,6 @@ class NeuroNER(object):
                     sequence_numbers=list(range(len(dataset.token_indices['train'])))
                     random.shuffle(sequence_numbers)
                     for sequence_number in sequence_numbers:
-
-
                         # transition_params_trained = train.train_step(sess, dataset, sequence_number, model, parameters)
                         torch_transition_params_trained = torch_train.train_step(dataset, sequence_number, torch_model, parameters)
                         step += 1

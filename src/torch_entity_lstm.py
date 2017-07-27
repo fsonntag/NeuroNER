@@ -28,6 +28,7 @@ class BiLSTM_CRF(nn.Module):
         self.char_embedding_dim = parameters['character_embedding_dimension']
         self.token_hidden_dim = parameters['token_lstm_hidden_state_dimension']
         self.char_hidden_dim = parameters['character_lstm_hidden_state_dimension']
+        self.num_gpus = parameters['number_of_gpus']
         self.vocab_size = dataset.vocabulary_size
         self.alphabet_size = dataset.vocabulary_size
 
@@ -64,16 +65,16 @@ class BiLSTM_CRF(nn.Module):
         self.transitions.data[:, self.tag_to_ix[STOP_TAG]] = -10000
 
         # self.token_hidden, self.char_hidden = self.init_hidden()
-        self.token_hidden = self.init_hidden(parameters)
+        self.token_hidden = self.init_hidden()
 
         self.define_training_procedure(parameters)
 
-    def init_hidden(self, parameters):
+    def init_hidden(self):
         # return ((autograd.Variable(torch.randn(2, 1, self.token_hidden_dim // 2)),
         #         autograd.Variable(torch.randn(2, 1, self.token_hidden_dim // 2))),
         #         (autograd.Variable(torch.randn(1, 1, self.char_hidden_dim)),
         #          autograd.Variable(torch.randn(1, 1, self.char_hidden_dim))))
-        if parameters['number_of_gpus'] > 0:
+        if self.num_gpus > 0:
             return (autograd.Variable(torch.randn(2, 1, self.token_hidden_dim // 2).cuda()),
                     autograd.Variable(torch.randn(2, 1, self.token_hidden_dim // 2)).cuda())
         else:

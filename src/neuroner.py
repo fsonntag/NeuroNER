@@ -280,6 +280,8 @@ class NeuroNER(object):
             torch_model.token_embeddings.weight.requires_grad = False
 
         torch.set_num_threads(parameters['number_of_cpu_threads'])
+        if parameters['number_of_cpu_threads'] > 0:
+            torch_model.cuda()
         # Launch session
         # session_conf = tf.ConfigProto(
         # intra_op_parallelism_threads=parameters['number_of_cpu_threads'],

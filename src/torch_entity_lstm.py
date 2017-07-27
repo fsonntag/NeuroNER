@@ -115,8 +115,6 @@ class BiLSTM_CRF(nn.Module):
         lstm_out, self.hidden = self.token_lstm(embeds, self.hidden)
         lstm_out = lstm_out.view(len(sentence), self.token_hidden_dim)
         lstm_feats = self.hidden2tag(lstm_out)
-        # lstm_feats[:, self.tag_to_ix[START_TAG]] = -10000.
-        # lstm_feats[:, self.tag_to_ix[STOP_TAG]] = -10000.
         return lstm_feats
 
     def _score_sentence(self, feats, tags):

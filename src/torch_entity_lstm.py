@@ -1,7 +1,7 @@
 # Author: Robert Guthrie
+import re
 import time
 
-import re
 import torch
 import torch.autograd as autograd
 import torch.nn as nn
@@ -60,7 +60,8 @@ class BiLSTM_CRF(nn.Module):
         # Matrix of transition parameters.  Entry i,j is the score of
         # transitioning *to* i *from* j.
         self.transitions = nn.Parameter(
-            torch.randn(self.tagset_size, self.tagset_size))
+            torch.randn(self.tagset_size, self.tagset_size).cuda() if self.num_gpus > 0
+            else torch.randn(self.tagset_size, self.tagset_size))
         self.transitions.data[self.tag_to_ix[START_TAG], :] = -10000
         self.transitions.data[:, self.tag_to_ix[STOP_TAG]] = -10000
 
@@ -128,7 +129,7 @@ class BiLSTM_CRF(nn.Module):
         # Gives the score of a provided tag sequence
         score = autograd.Variable(torch.Tensor([0]))
         tags = torch.cat([torch.LongTensor([self.tag_to_ix[START_TAG]]).cuda() if self.num_gpus > 0 else
-                          torch.LongTensor([self.tag_to_ix[START_TAG]]).cuda(), tags.data])
+                          torch.LongTensor([self.tag_to_ix[START_TAG]]), tags.data])
         for i, feat in enumerate(feats):
             score = score + \
                     self.transitions[tags[i + 1], tags[i]] + feat[tags[i + 1]]
@@ -149,9 +150,11 @@ class BiLSTM_CRF(nn.Module):
             forward_var = autograd.Variable(init_vvars)
         for feat in feats:
             bptrs_t = autograd.Variable(
-                torch.IntTensor(self.tagset_size).zero_().cuda() if self.num_gpus > 0 else torch.IntTensor(self.tagset_size).zero_())  # holds the backpointers for this step
+                torch.IntTensor(self.tagset_size).zero_().cuda() if self.num_gpus > 0 else torch.IntTensor(
+                    self.tagset_size).zero_())  # holds the backpointers for this step
             viterbivars_t = autograd.Variable(
-                torch.FloatTensor(self.tagset_size).zero_().cuda() if self.num_gpus > 0 else torch.FloatTensor(self.tagset_size).zero_())  # holds the viterbi variables for this step
+                torch.FloatTensor(self.tagset_size).zero_().cuda() if self.num_gpus > 0 else torch.FloatTensor(
+                    self.tagset_size).zero_())  # holds the viterbi variables for this step
 
             for i, next_tag in enumerate(range(self.tagset_size)):
                 # next_tag_var[i] holds the viterbi variable for tag i at the
@@ -208,7 +211,6 @@ class BiLSTM_CRF(nn.Module):
         else:
             raise ValueError('The lr_method parameter must be sgd.')
 
-
     def load_pretrained_token_embeddings(self, dataset, parameters, token_to_vector=None):
         if parameters['token_pretrained_embedding_filepath'] == '':
             return
@@ -224,18 +226,22 @@ class BiLSTM_CRF(nn.Module):
         number_of_token_lowercase_and_digits_replaced_with_zeros_found = 0
         for token in dataset.token_to_index.keys():
             if token in token_to_vector.keys():
-                self.token_embeddings.weight.data[dataset.token_to_index[token]] = torch.from_numpy(token_to_vector[token])
+                self.token_embeddings.weight.data[dataset.token_to_index[token]] = torch.from_numpy(
+                    token_to_vector[token])
                 number_of_token_original_case_found += 1
             elif parameters['check_for_lowercase'] and token.lower() in token_to_vector.keys():
-                self.token_embeddings.weight.data[dataset.token_to_index[token]] = torch.from_numpy(token_to_vector[token.lower()])
+                self.token_embeddings.weight.data[dataset.token_to_index[token]] = torch.from_numpy(
+                    token_to_vector[token.lower()])
                 number_of_token_lowercase_found += 1
             elif parameters['check_for_digits_replaced_with_zeros'] and re.sub('\d', '0',
                                                                                token) in token_to_vector.keys():
-                self.token_embeddings.weight.data[dataset.token_to_index[token]] = torch.from_numpy(token_to_vector[re.sub('\d', '0', token)])
+                self.token_embeddings.weight.data[dataset.token_to_index[token]] = torch.from_numpy(
+                    token_to_vector[re.sub('\d', '0', token)])
                 number_of_token_digits_replaced_with_zeros_found += 1
             elif parameters['check_for_lowercase'] and parameters['check_for_digits_replaced_with_zeros'] and re.sub(
                     '\d', '0', token.lower()) in token_to_vector.keys():
-                self.token_embeddings.weight.data[dataset.token_to_index[token]] = torch.from_numpy(token_to_vector[re.sub('\d', '0', token.lower())])
+                self.token_embeddings.weight.data[dataset.token_to_index[token]] = torch.from_numpy(
+                    token_to_vector[re.sub('\d', '0', token.lower())])
                 number_of_token_lowercase_and_digits_replaced_with_zeros_found += 1
             else:
                 continue
@@ -250,8 +256,6 @@ class BiLSTM_CRF(nn.Module):
             number_of_token_lowercase_and_digits_replaced_with_zeros_found))
         print('number_of_loaded_word_vectors: {0}'.format(number_of_loaded_word_vectors))
         print("dataset.vocabulary_size: {0}".format(dataset.vocabulary_size))
-
-
 
     def load_embeddings_from_pretrained_model(self, dataset, pretraining_dataset, pretrained_embedding_weights,
                                               embedding_type='token'):

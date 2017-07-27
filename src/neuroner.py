@@ -269,6 +269,15 @@ class NeuroNER(object):
         token_to_vector = dataset.load_dataset(dataset_filepaths, parameters)
 
         torch_model = BiLSTM_CRF(dataset, parameters)
+        if not parameters['use_pretrained_model']:
+            torch_model.load_pretrained_token_embeddings(dataset, parameters, token_to_vector)
+            self.transition_params_trained = np.random.rand(len(dataset.unique_labels) + 2,
+                                                            len(dataset.unique_labels) + 2)
+        else:
+            self.transition_params_trained = torch_model.restore_from_pretrained_model(parameters, dataset, token_to_vector=token_to_vector)
+
+        if not parameters['freeze_token_embeddings']:
+            torch_model.token_embeddings.weight.requires_grad = False
 
         torch.set_num_threads(parameters['number_of_cpu_threads'])
         # Launch session
@@ -292,8 +301,8 @@ class NeuroNER(object):
         #         self.transition_params_trained = np.random.rand(len(dataset.unique_labels)+2,len(dataset.unique_labels)+2)
         #     else:
         #         self.transition_params_trained = model.restore_from_pretrained_model(parameters, dataset, sess, token_to_vector=token_to_vector)
-        #     del token_to_vector
-        self.transition_params_trained = np.random.rand(len(dataset.unique_labels)+2,len(dataset.unique_labels)+2)
+        del token_to_vector
+
         self.dataset = dataset
         self.dataset_brat_folders = dataset_brat_folders
         self.dataset_filepaths = dataset_filepaths

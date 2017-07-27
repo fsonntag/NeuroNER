@@ -1,9 +1,13 @@
 # Author: Robert Guthrie
+import time
 
+import re
 import torch
 import torch.autograd as autograd
 import torch.nn as nn
 import torch.optim as optim
+
+import utils_nlp
 
 START_TAG = "<START>"
 STOP_TAG = "<STOP>"
@@ -35,7 +39,7 @@ class BiLSTM_CRF(nn.Module):
         self.tag_to_ix[STOP_TAG] = maximum_label_index + 2
         self.tagset_size = len(self.tag_to_ix)
 
-        self.word_embeddings = nn.Embedding(self.vocab_size, self.token_embedding_dim)
+        self.token_embeddings = nn.Embedding(self.vocab_size, self.token_embedding_dim)
         # self.char_embeddings = nn.Embedding(self.alphabet_size, self.char_embedding_dim)
 
         # if parameters['use_character_lstm']:
@@ -107,7 +111,7 @@ class BiLSTM_CRF(nn.Module):
 
     def _get_lstm_features(self, sentence):
         self.hidden = self.init_hidden()
-        embeds = self.word_embeddings(sentence).view(len(sentence), 1, -1)
+        embeds = self.token_embeddings(sentence).view(len(sentence), 1, -1)
         lstm_out, self.hidden = self.token_lstm(embeds, self.hidden)
         lstm_out = lstm_out.view(len(sentence), self.token_hidden_dim)
         lstm_feats = self.hidden2tag(lstm_out)
@@ -195,6 +199,54 @@ class BiLSTM_CRF(nn.Module):
         else:
             raise ValueError('The lr_method parameter must be sgd.')
 
-        if parameters['gradient_clipping_value']:
-            # TODO
-            pass
+
+    def load_pretrained_token_embeddings(self, dataset, parameters, token_to_vector=None):
+        if parameters['token_pretrained_embedding_filepath'] == '':
+            return
+        # Load embeddings
+        start_time = time.time()
+        print('Load token embeddings... ', end='', flush=True)
+        if token_to_vector == None:
+            token_to_vector = utils_nlp.load_pretrained_token_embeddings(parameters)
+        number_of_loaded_word_vectors = 0
+        number_of_token_original_case_found = 0
+        number_of_token_lowercase_found = 0
+        number_of_token_digits_replaced_with_zeros_found = 0
+        number_of_token_lowercase_and_digits_replaced_with_zeros_found = 0
+        for token in dataset.token_to_index.keys():
+            if token in token_to_vector.keys():
+                self.token_embeddings.weight.data[dataset.token_to_index[token]] = torch.from_numpy(token_to_vector[token])
+                number_of_token_original_case_found += 1
+            elif parameters['check_for_lowercase'] and token.lower() in token_to_vector.keys():
+                self.token_embeddings.weight.data[dataset.token_to_index[token]] = torch.from_numpy(token_to_vector[token.lower()])
+                number_of_token_lowercase_found += 1
+            elif parameters['check_for_digits_replaced_with_zeros'] and re.sub('\d', '0',
+                                                                               token) in token_to_vector.keys():
+                self.token_embeddings.weight.data[dataset.token_to_index[token]] = torch.from_numpy(token_to_vector[re.sub('\d', '0', token)])
+                number_of_token_digits_replaced_with_zeros_found += 1
+            elif parameters['check_for_lowercase'] and parameters['check_for_digits_replaced_with_zeros'] and re.sub(
+                    '\d', '0', token.lower()) in token_to_vector.keys():
+                self.token_embeddings.weight.data[dataset.token_to_index[token]] = torch.from_numpy(token_to_vector[re.sub('\d', '0', token.lower())])
+                number_of_token_lowercase_and_digits_replaced_with_zeros_found += 1
+            else:
+                continue
+            number_of_loaded_word_vectors += 1
+        elapsed_time = time.time() - start_time
+        print('done ({0:.2f} seconds)'.format(elapsed_time))
+        print("number_of_token_original_case_found: {0}".format(number_of_token_original_case_found))
+        print("number_of_token_lowercase_found: {0}".format(number_of_token_lowercase_found))
+        print("number_of_token_digits_replaced_with_zeros_found: {0}".format(
+            number_of_token_digits_replaced_with_zeros_found))
+        print("number_of_token_lowercase_and_digits_replaced_with_zeros_found: {0}".format(
+            number_of_token_lowercase_and_digits_replaced_with_zeros_found))
+        print('number_of_loaded_word_vectors: {0}'.format(number_of_loaded_word_vectors))
+        print("dataset.vocabulary_size: {0}".format(dataset.vocabulary_size))
+
+
+
+    def load_embeddings_from_pretrained_model(self, dataset, pretraining_dataset, pretrained_embedding_weights,
+                                              embedding_type='token'):
+        raise NotImplementedError
+
+    def restore_from_pretrained_model(self, parameters, dataset, token_to_vector=None):
+        raise NotImplementedError

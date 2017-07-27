@@ -3,6 +3,7 @@ import os
 
 import sklearn.metrics
 import torch
+import torch.nn as nn
 from torch import autograd
 
 import utils_nlp
@@ -19,6 +20,10 @@ def train_step(dataset, sequence_number, model, parameters):
     neg_log_likelihood = model.neg_log_likelihood(sentence_in, targets)
 
     neg_log_likelihood.backward()
+
+    if parameters['gradient_clipping_value']:
+        nn.utils.clip_grad_norm(model.parameters(), parameters['gradient_clipping_value'])
+
     model.optimizer.step()
     transition_params_trained = model.transitions.data.numpy()
     return transition_params_trained

@@ -13,12 +13,14 @@ from evaluate import remap_labels
 def train_step(dataset, sequence_number, model, parameters):
     model.zero_grad()
     token_indices = dataset.token_indices['train'][sequence_number]
-    sentence_in = autograd.Variable(torch.LongTensor(token_indices))
     label_indices = dataset.label_indices['train'][sequence_number]
-    targets = autograd.Variable(torch.LongTensor(label_indices))
 
     if parameters['number_of_gpus'] > 0:
-        sentence_in, targets = autograd.Variable(sentence_in.cuda()), autograd.Variable(targets.cuda())
+        sentence_in = autograd.Variable(torch.LongTensor(token_indices).cuda())
+        targets = autograd.Variable(torch.LongTensor(label_indices).cuda())
+    else:
+        sentence_in = autograd.Variable(torch.LongTensor(token_indices))
+        targets = autograd.Variable(torch.LongTensor(label_indices))
 
     neg_log_likelihood = model.neg_log_likelihood(sentence_in, targets)
 
@@ -46,10 +48,11 @@ def prediction_step(dataset, dataset_type, model, transition_params_trained, sta
 
     for i in range(len(dataset.token_indices[dataset_type])):
         token_indices = dataset.token_indices[dataset_type][i]
-        sentence = autograd.Variable(torch.LongTensor(token_indices))
 
         if parameters['number_of_gpus'] > 0:
-            sentence = autograd.Variable(sentence.cuda())
+            sentence = autograd.Variable(torch.LongTensor(token_indices).cuda())
+        else:
+            sentence = autograd.Variable(torch.LongTensor(token_indices))
 
         score, predictions = model(sentence)
 

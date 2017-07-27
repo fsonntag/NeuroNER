@@ -7,6 +7,8 @@ import utils_nlp
 import json
 from pycorenlp import StanfordCoreNLP
 
+spacy_nlp = None
+core_nlp = None
 
 def get_start_and_end_offset_of_token_from_spacy(token):
     start = token.idx
@@ -121,9 +123,11 @@ def brat_to_conll(input_folder, output_filepath, tokenizer, language):
     Assumes '.txt' and '.ann' files are in the input_folder.
     Checks for the compatibility between .txt and .ann at the same time.
     '''
-    if tokenizer == 'spacy':
+    global spacy_nlp
+    global core_nlp
+    if tokenizer == 'spacy' and not spacy_nlp:
         spacy_nlp = spacy.load(language)
-    elif tokenizer == 'stanford':
+    elif tokenizer == 'stanford' and not core_nlp:
         core_nlp = StanfordCoreNLP('http://localhost:{0}'.format(9000))
     else:
         raise ValueError("tokenizer should be either 'spacy' or 'stanford'.")

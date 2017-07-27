@@ -30,7 +30,10 @@ def train_step(dataset, sequence_number, model, parameters):
         nn.utils.clip_grad_norm(model.parameters(), parameters['gradient_clipping_value'])
 
     model.optimizer.step()
-    transition_params_trained = model.transitions.data.numpy()
+    if parameters['number_of_gpus'] > 0:
+        transition_params_trained = model.transitions.data.cpu().numpy()
+    else:
+        transition_params_trained = model.transitions.data.numpy()
     return transition_params_trained
 
 

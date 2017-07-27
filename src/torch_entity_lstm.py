@@ -60,8 +60,7 @@ class BiLSTM_CRF(nn.Module):
         # Matrix of transition parameters.  Entry i,j is the score of
         # transitioning *to* i *from* j.
         self.transitions = nn.Parameter(
-            torch.randn(self.tagset_size, self.tagset_size).cuda() if self.num_gpus > 0
-            else torch.randn(self.tagset_size, self.tagset_size))
+            torch.randn(self.tagset_size, self.tagset_size))
         self.transitions.data[self.tag_to_ix[START_TAG], :] = -10000
         self.transitions.data[:, self.tag_to_ix[STOP_TAG]] = -10000
 

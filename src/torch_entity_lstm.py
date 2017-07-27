@@ -148,9 +148,9 @@ class BiLSTM_CRF(nn.Module):
             forward_var = autograd.Variable(init_vvars)
         for feat in feats:
             bptrs_t = autograd.Variable(
-                torch.IntTensor(self.tagset_size).zero_())  # holds the backpointers for this step
+                torch.IntTensor(self.tagset_size).zero_().cuda() if self.num_gpus > 0 else torch.IntTensor(self.tagset_size).zero_())  # holds the backpointers for this step
             viterbivars_t = autograd.Variable(
-                torch.FloatTensor(self.tagset_size).zero_())  # holds the viterbi variables for this step
+                torch.FloatTensor(self.tagset_size).zero_().cuda() if self.num_gpus > 0 else torch.FloatTensor(self.tagset_size).zero_())  # holds the viterbi variables for this step
 
             for i, next_tag in enumerate(range(self.tagset_size)):
                 # next_tag_var[i] holds the viterbi variable for tag i at the

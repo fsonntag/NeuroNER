@@ -64,18 +64,21 @@ class BiLSTM_CRF(nn.Module):
         self.transitions.data[:, self.tag_to_ix[STOP_TAG]] = -10000
 
         # self.token_hidden, self.char_hidden = self.init_hidden()
-        self.token_hidden = self.init_hidden()
+        self.token_hidden = self.init_hidden(parameters)
 
         self.define_training_procedure(parameters)
 
-    def init_hidden(self):
+    def init_hidden(self, parameters):
         # return ((autograd.Variable(torch.randn(2, 1, self.token_hidden_dim // 2)),
         #         autograd.Variable(torch.randn(2, 1, self.token_hidden_dim // 2))),
         #         (autograd.Variable(torch.randn(1, 1, self.char_hidden_dim)),
         #          autograd.Variable(torch.randn(1, 1, self.char_hidden_dim))))
-
-        return (autograd.Variable(torch.randn(2, 1, self.token_hidden_dim // 2)),
-                autograd.Variable(torch.randn(2, 1, self.token_hidden_dim // 2)))
+        if parameters['number_of_gpus'] > 0:
+            return (autograd.Variable(torch.randn(2, 1, self.token_hidden_dim // 2).cuda()),
+                    autograd.Variable(torch.randn(2, 1, self.token_hidden_dim // 2)).cuda())
+        else:
+            return (autograd.Variable(torch.randn(2, 1, self.token_hidden_dim // 2)),
+                    autograd.Variable(torch.randn(2, 1, self.token_hidden_dim // 2)))
 
     def _forward_alg(self, feats):
         # Do the forward algorithm to compute the partition function

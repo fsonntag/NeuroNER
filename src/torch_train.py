@@ -47,6 +47,10 @@ def prediction_step(dataset, dataset_type, model, transition_params_trained, sta
     for i in range(len(dataset.token_indices[dataset_type])):
         token_indices = dataset.token_indices[dataset_type][i]
         sentence = autograd.Variable(torch.LongTensor(token_indices))
+
+        if parameters['number_of_gpus'] > 0:
+            sentence = autograd.Variable(sentence.cuda())
+
         score, predictions = model(sentence)
 
         assert (len(predictions) == len(dataset.tokens[dataset_type][i]))

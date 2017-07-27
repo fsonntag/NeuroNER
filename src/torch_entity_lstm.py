@@ -142,7 +142,10 @@ class BiLSTM_CRF(nn.Module):
         init_vvars[0, self.tag_to_ix[START_TAG]] = 0
 
         # forward_var at step i holds the viterbi variables for step i-1
-        forward_var = autograd.Variable(init_vvars)
+        if self.num_gpus > 0:
+            forward_var = autograd.Variable(init_vvars.cuda())
+        else:
+            forward_var = autograd.Variable(init_vvars)
         for feat in feats:
             bptrs_t = autograd.Variable(
                 torch.IntTensor(self.tagset_size).zero_())  # holds the backpointers for this step

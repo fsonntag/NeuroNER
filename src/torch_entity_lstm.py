@@ -120,7 +120,7 @@ class BiLSTM_CRF(nn.Module):
     def _score_sentence(self, feats, tags):
         # Gives the score of a provided tag sequence
         score = autograd.Variable(torch.Tensor([0]))
-        tags = torch.cat([torch.LongTensor([self.tag_to_ix[START_TAG]]), tags])
+        tags = torch.cat([torch.LongTensor([self.tag_to_ix[START_TAG]]), tags.data])
         for i, feat in enumerate(feats):
             score = score + \
                     self.transitions[tags[i + 1], tags[i]] + feat[tags[i + 1]]

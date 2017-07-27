@@ -15,7 +15,10 @@ def train_step(dataset, sequence_number, model, parameters):
     token_indices = dataset.token_indices['train'][sequence_number]
     sentence_in = autograd.Variable(torch.LongTensor(token_indices))
     label_indices = dataset.label_indices['train'][sequence_number]
-    targets = torch.LongTensor(label_indices)
+    targets = autograd.Variable(torch.LongTensor(label_indices))
+
+    if parameters['number_of_gpus'] > 0:
+        sentence_in, targets = autograd.Variable(sentence_in.cuda()), autograd.Variable(targets.cuda())
 
     neg_log_likelihood = model.neg_log_likelihood(sentence_in, targets)
 

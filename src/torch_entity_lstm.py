@@ -83,7 +83,10 @@ class BiLSTM_CRF(nn.Module):
 
     def _forward_alg(self, feats):
         # Do the forward algorithm to compute the partition function
-        init_alphas = torch.Tensor(1, self.tagset_size).fill_(-10000.)
+        if self.num_gpus > 0:
+            init_alphas = torch.Tensor(1, self.tagset_size).fill_(-10000.).cuda()
+        else:
+            init_alphas = torch.Tensor(1, self.tagset_size).fill_(-10000.)
         # START_TAG has all of the score.
         init_alphas[0][self.tag_to_ix[START_TAG]] = 0.
 

@@ -355,13 +355,14 @@ class NeuroNER(object):
             token_list_file.write('{0}\n'.format(dataset.index_to_token[token_index]))
         token_list_file.close()
 
-        character_list_file = codecs.open(character_list_file_path,'w', 'UTF-8')
-        for character_index in range(dataset.alphabet_size):
-            if character_index == dataset.PADDING_CHARACTER_INDEX:
-                character_list_file.write('PADDING\n')
-            else:
-                character_list_file.write('{0}\n'.format(dataset.index_to_character[character_index]))
-        character_list_file.close()
+        if hasattr(model, 'character_embedding_weights'):
+            character_list_file = codecs.open(character_list_file_path,'w', 'UTF-8')
+            for character_index in range(dataset.alphabet_size):
+                if character_index == dataset.PADDING_CHARACTER_INDEX:
+                    character_list_file.write('PADDING\n')
+                else:
+                    character_list_file.write('{0}\n'.format(dataset.index_to_character[character_index]))
+            character_list_file.close()
 
 
         # Start training + evaluation loop. Each iteration corresponds to 1 epoch.

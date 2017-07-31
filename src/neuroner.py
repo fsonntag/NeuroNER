@@ -341,10 +341,11 @@ class NeuroNER(object):
         token_list_file_path = os.path.join(model_folder, 'tensorboard_metadata_tokens.tsv')
         tensorboard_token_embeddings.metadata_path = os.path.relpath(token_list_file_path, '..')
 
-        tensorboard_character_embeddings = embeddings_projector_config.embeddings.add()
-        tensorboard_character_embeddings.tensor_name = model.character_embedding_weights.name
-        character_list_file_path = os.path.join(model_folder, 'tensorboard_metadata_characters.tsv')
-        tensorboard_character_embeddings.metadata_path = os.path.relpath(character_list_file_path, '..')
+        if hasattr(model, 'character_embedding_weights'):
+            tensorboard_character_embeddings = embeddings_projector_config.embeddings.add()
+            tensorboard_character_embeddings.tensor_name = model.character_embedding_weights.name
+            character_list_file_path = os.path.join(model_folder, 'tensorboard_metadata_characters.tsv')
+            tensorboard_character_embeddings.metadata_path = os.path.relpath(character_list_file_path, '..')
 
         projector.visualize_embeddings(embedding_writer, embeddings_projector_config)
 

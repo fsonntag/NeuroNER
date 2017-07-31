@@ -230,7 +230,7 @@ class EntityLSTM(object):
         grads_and_vars = self.optimizer.compute_gradients(self.loss)
         if parameters['gradient_clipping_value']:
             grads_and_vars = [(tf.clip_by_value(grad, -parameters['gradient_clipping_value'], parameters['gradient_clipping_value']), var) 
-                              for grad, var in grads_and_vars]
+                              for grad, var in grads_and_vars if grad is not None]
         # By defining a global_step variable and passing it to the optimizer we allow TensorFlow handle the counting of training steps for us.
         # The global step will be automatically incremented by one every time you execute train_op.
         self.train_op = self.optimizer.apply_gradients(grads_and_vars, global_step=self.global_step)

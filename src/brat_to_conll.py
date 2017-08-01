@@ -94,6 +94,7 @@ def get_entities_from_brat(text_filepath, annotation_filepath, verbose=False):
                 if utils_nlp.replace_unicode_whitespaces_with_ascii_whitespace(text[entity['start']:entity['end']]) != \
                     utils_nlp.replace_unicode_whitespaces_with_ascii_whitespace(entity['text']):
                     print("Warning: brat text and annotation do not match.")
+                    print("Annotation filepath: {0}".format(annotation_filepath))
                     print("\ttext: {0}".format(text[entity['start']:entity['end']]))
                     print("\tanno: {0}".format(entity['text']))
                 # add to entitys data

@@ -223,6 +223,7 @@ class NeuroNER(object):
                  load_only_pretrained_token_embeddings=argument_default_value,
                  load_all_pretrained_token_embeddings=argument_default_value,
                  main_evaluation_mode=argument_default_value,
+                 conll_strictness=argument_default_value,
                  maximum_number_of_epochs=argument_default_value,
                  number_of_cpu_threads=argument_default_value,
                  number_of_gpus=argument_default_value,

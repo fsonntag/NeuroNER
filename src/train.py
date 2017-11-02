@@ -5,6 +5,7 @@ import numpy as np
 import sklearn.metrics
 import tensorflow as tf
 
+import conlleval
 import utils_nlp
 from evaluate import remap_labels
 
@@ -89,13 +90,16 @@ def prediction_step(sess, dataset, dataset_type, model, transition_params_traine
 
     if dataset_type != 'deploy':
         if parameters['main_evaluation_mode'] == 'conll':
-            conll_evaluation_script = os.path.join('.', 'conlleval')
-            conll_output_filepath = '{0}_conll_evaluation.txt'.format(output_filepath)
-            shell_command = 'perl {0} < {1} > {2}'.format(conll_evaluation_script, output_filepath, conll_output_filepath)
-            os.system(shell_command)
-            with open(conll_output_filepath, 'r') as f:
-                classification_report = f.read()
-                print(classification_report)
+            # conll_evaluation_script = os.path.join('.', 'conlleval')
+            # conll_output_filepath = '{0}_conll_evaluation.txt'.format(output_filepath)
+            with open(output_filepath) as f:
+                counts = conlleval.evaluate(f)
+                conlleval.report(counts)
+            # shell_command = 'perl {0} < {1} > {2}'.format(conll_evaluation_script, output_filepath, conll_output_filepath)
+            # os.system(shell_command)
+            # with open(conll_output_filepath, 'r') as f:
+            #     classification_report = f.read()
+            #     print(classification_report)
         else:
             new_y_pred, new_y_true, new_label_indices, new_label_names, _, _ = remap_labels(all_predictions, all_y_true, dataset, parameters['main_evaluation_mode'])
             print(sklearn.metrics.classification_report(new_y_true, new_y_pred, digits=4, labels=new_label_indices, target_names=new_label_names))

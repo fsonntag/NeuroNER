@@ -195,6 +195,7 @@ def parse_arguments(arguments=None):
     parser.add_argument('--load_only_pretrained_token_embeddings', required=False, default=argument_default_value, help='')
     parser.add_argument('--load_all_pretrained_token_embeddings', required=False, default=argument_default_value, help='')
     parser.add_argument('--main_evaluation_mode', required=False, default=argument_default_value, help='')
+    parser.add_argument('--conll_strictness', required=False, default=argument_default_value, help='')
     parser.add_argument('--maximum_number_of_epochs', required=False, default=argument_default_value, help='')
     parser.add_argument('--number_of_cpu_threads', required=False, default=argument_default_value, help='')
     parser.add_argument('--number_of_gpus', required=False, default=argument_default_value, help='')

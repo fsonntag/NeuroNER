@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sklearn.metrics
 import os
+
+import conlleval
 import utils_plots
 import json
 import time
@@ -248,24 +250,37 @@ def evaluate_model(results, dataset, y_pred_all, y_true_all, stats_graph_folder,
     for dataset_type in ['train', 'valid', 'test']:
         if dataset_type not in output_filepaths.keys():
             continue
-        conll_evaluation_script = os.path.join('.', 'conlleval')
+        # conll_evaluation_script = os.path.join('.', 'conlleval')
         conll_output_filepath = '{0}_conll_evaluation.txt'.format(output_filepaths[dataset_type])
-        shell_command = 'perl {0} < {1} > {2}'.format(conll_evaluation_script, output_filepaths[dataset_type], conll_output_filepath)
-        print('shell_command: {0}'.format(shell_command))
-        os.system(shell_command)
-        conll_parsed_output = utils_nlp.get_parsed_conll_output(conll_output_filepath)
+        with open(output_filepaths[dataset_type]) as output_file, open(conll_output_filepath, 'w') as conll_output_file:
+            counts = conlleval.evaluate(output_file)
+            conlleval.report(counts, out=conll_output_file)
+            conll_parsed_output = conlleval.parse_output(counts)
+        # shell_command = 'perl {0} < {1} > {2}'.format(conll_evaluation_script, output_filepaths[dataset_type], conll_output_filepath)
+        # print('shell_command: {0}'.format(shell_command))
+        # os.system(shell_command)
+        # conll_parsed_output = utils_nlp.get_parsed_conll_output(conll_output_filepath)
         results['epoch'][epoch_number][0][dataset_type]['conll'] = conll_parsed_output
         results['epoch'][epoch_number][0][dataset_type]['f1_conll'] = {}
         results['epoch'][epoch_number][0][dataset_type]['f1_conll']['micro'] = results['epoch'][epoch_number][0][dataset_type]['conll']['all']['f1']
         if parameters['main_evaluation_mode'] == 'conll':
             results['epoch'][epoch_number][0][dataset_type]['f1_score'] = {}
-            results['epoch'][epoch_number][0][dataset_type]['f1_score']['micro'] = results['epoch'][epoch_number][0][dataset_type]['conll']['all']['f1']
+            if parameters['conll_strictness'] == 'exact':
+                results['epoch'][epoch_number][0][dataset_type]['f1_score']['micro'] = \
+                results['epoch'][epoch_number][0][dataset_type]['conll']['all']['f1']
+            elif parameters['conlll_strictness'] == 'overlapping':
+                results['epoch'][epoch_number][0][dataset_type]['f1_score']['micro'] = \
+                results['epoch'][epoch_number][0][dataset_type]['conll']['all']['overlapping']['f1']
+            elif parameters['conlll_strictness'] == 'half_overlapping':
+                results['epoch'][epoch_number][0][dataset_type]['f1_score']['micro'] = \
+                results['epoch'][epoch_number][0][dataset_type]['conll']['all']['half_overlapping']['f1']
+            # results['epoch'][epoch_number][0][dataset_type]['f1_score']['micro'] = results['epoch'][epoch_number][0][dataset_type]['conll']['all']['f1']
             results['epoch'][epoch_number][0][dataset_type]['accuracy_score'] = results['epoch'][epoch_number][0][dataset_type]['conll']['all']['accuracy']
             utils_plots.plot_classification_report(results['epoch'][epoch_number][0][dataset_type]['conll'],
                 title='Classification report for epoch {0} in {1} ({2} evaluation)\n'.format(epoch_number, dataset_type, 'conll'),
                 cmap='RdBu', from_conll_json=True)
-            plt.savefig(os.path.join(stats_graph_folder, 'classification_report_for_epoch_{0:04d}_in_{1}_conll_evaluation.{3}'.format(epoch_number, dataset_type,
-                                                                                                                                    evaluation_mode, parameters['plot_format'])),
+            plt.savefig(os.path.join(stats_graph_folder, 'classification_report_for_epoch_{0:04d}_in_{1}_conll_evaluation.{2}'.format(epoch_number, dataset_type,
+                                                                                                                                     parameters['plot_format'])),
                         dpi=300, format=parameters['plot_format'], bbox_inches='tight')
             plt.close()
 

@@ -20,6 +20,7 @@ ANY_SPACE = '<SPACE>'
 class FormatError(Exception):
     pass
 
+
 """
 from nalaf.evaluators
 strictness:
@@ -33,7 +34,6 @@ Determines whether a text spans matches and how we count that match, 3 possible 
         1 when we have exact match
         0.5 when we have overlapping match
 """
-
 
 Metrics = namedtuple('Metrics', ['tp', 'fp', 'fn',
                                  'fp_ov', 'fn_ov',
@@ -102,6 +102,7 @@ def evaluate(iterable, options=None):
     last_correct_type = ''  # type of previously identified chunk tag
     last_guessed = 'O'  # previously identified chunk tag
     last_guessed_type = ''  # type of previous chunk tag in corpus
+    last_line = ''
 
     for line in iterable:
         line = line.rstrip('\r\n')
@@ -166,8 +167,8 @@ def evaluate(iterable, options=None):
                 in_correct_matching = False
                 counts.correct_chunk += 1
                 counts.t_correct_chunk[last_correct_type] += 1
-                counts.overlapping_chunk += 1
-                counts.t_overlapping_chunk[last_correct_type] += 1
+                # counts.overlapping_chunk += 1
+                # counts.t_overlapping_chunk[last_correct_type] += 1
             elif (end_correct != end_guessed or guessed_type != correct_type):
                 in_correct_matching = False
 
@@ -190,7 +191,7 @@ def evaluate(iterable, options=None):
         last_guessed_type = guessed_type
         last_correct_type = correct_type
 
-        # current_offset += 1
+        last_line = line
 
     if in_correct_matching:
         counts.correct_chunk += 1
@@ -213,15 +214,18 @@ def calculate_metrics(correct, guessed, total, overlapping):
     r = safe_div(tp, tp + fn)
     f = safe_div(2 * p * r, p + r)
 
-    fp_ov = fp - fp_ov
-    fn_ov = fn - fn_ov
-    tp_ov = tp + fp_ov + fn_ov
-    p_ov = safe_div(tp_ov, tp_ov + fp_ov)
-    r_ov = safe_div(tp_ov, tp_ov + fn_ov)
+    _fp_ov = fp - fp_ov
+    _fn_ov = fn - fn_ov
+    _tp_ov = tp + fp_ov + fn_ov
+    p_ov = safe_div(_tp_ov, _tp_ov + _fp_ov)
+    r_ov = safe_div(_tp_ov, _tp_ov + _fn_ov)
     f_ov = safe_div(2 * p_ov * r_ov, p_ov + r_ov)
 
-    p_half_ov = safe_div(tp_ov / 2, tp + fp_ov + fn_ov + fp)
-    r_half_ov = safe_div(tp_ov / 2, tp + fp_ov + fn_ov + fn)
+    _tp_half_ov = tp + (fp_ov + fn_ov) / 2
+    _fp_half_ov = fp - fp_ov
+    _fn_half_ov = fn - fn_ov
+    p_half_ov = safe_div(_tp_half_ov, tp + fp_ov + fn_ov + _fp_half_ov)
+    r_half_ov = safe_div(_tp_half_ov, tp + fp_ov + fn_ov + _fn_half_ov)
     f_half_ov = safe_div(2 * p_half_ov * r_half_ov, p_half_ov + r_half_ov)
 
     return Metrics(tp, fp, fn, fp_ov, fn_ov, p, r, f, p_ov, r_ov, f_ov, p_half_ov, r_half_ov, f_half_ov)
@@ -233,6 +237,7 @@ def safe_div(nominator, denominator):
         return nominator / denominator
     except ZeroDivisionError:
         return 0.0  # arbitrary; or float('NaN')
+
 
 def metrics(counts):
     c = counts
@@ -319,24 +324,25 @@ def parse_output(counts):
             'f1': overall.fscore_half_ov
         }
     }}
-    for type, scores in by_type:
+    for type, scores in by_type.items():
         conll_parsed_output[type] = {
-        'precision': scores.prec,
-        'f1': scores.fscore,
-        'recall': scores.rec,
-        'support': counts.t_found_guessed[type],
-        'overlapping': {
-            'precision': scores.prec_ov,
-            'recall': scores.rec_ov,
-            'f1': scores.fscore_ov
-        },
-        'half_overlapping': {
-            'precision': scores.prec_half_ov,
-            'recall': scores.rec_half_ov,
-            'f1': scores.fscore_half_ov
+            'precision': scores.prec,
+            'f1': scores.fscore,
+            'recall': scores.rec,
+            'support': counts.t_found_guessed[type],
+            'overlapping': {
+                'precision': scores.prec_ov,
+                'recall': scores.rec_ov,
+                'f1': scores.fscore_ov
+            },
+            'half_overlapping': {
+                'precision': scores.prec_half_ov,
+                'recall': scores.rec_half_ov,
+                'f1': scores.fscore_half_ov
+            }
         }
-    }
     return conll_parsed_output
+
 
 def end_of_chunk(prev_tag, tag, prev_type, type_):
     # check if a chunk ended between the previous and current word
@@ -401,5 +407,3 @@ def main(argv):
 
 if __name__ == '__main__':
     sys.exit(main(sys.argv))
-
-
